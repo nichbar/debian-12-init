@@ -1,113 +1,142 @@
 # VPS Setup Script for Debian 12
 
-An interactive bash script that automates the complete setup of a new Debian 12 VPS with security hardening, network optimization, and Xray core installation.
+An interactive, robust Bash script that automates the initial setup and configuration of a fresh Debian 12 VPS with network optimization, custom SSH port management, SSH public key hardening, Xray core installation, terminal enhancements, and UFW firewall protection.
 
-## Quick Install (One-Liner)
+## Quick Install
 
-**Easiest way to run:**
+### Recommended (Process Substitution)
+
+Process substitution connects your terminal's TTY so interactive prompts and the `nano` editor work smoothly:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/nichbar/debian-12-init/main/vps-setup.sh | bash
+bash <(curl -sSL https://raw.githubusercontent.com/nichbar/debian-12-init/main/vps-setup.sh)
 ```
 
-## GitHub Deployment
+### Alternative (Download & Run)
 
-To deploy this script on GitHub:
-
-1. **Create a new repository** on GitHub
-2. **Upload the files**:
-   - `vps-setup.sh` - Main script
-   - `README.md` - This documentation
-3. **Update the URLs** in this README with your actual repository path
-
-**Repository Structure:**
-```
-your-repo/
-├── main/
-│   ├── vps-setup.sh      # Main setup script
-│   └── README.md         # Documentation
-```
-
-Your one-liner will then be:
 ```bash
-curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/vps-setup.sh | bash
+curl -sSL -O https://raw.githubusercontent.com/nichbar/debian-12-init/main/vps-setup.sh
+chmod +x vps-setup.sh
+sudo ./vps-setup.sh
 ```
+
+> **Note**: Avoid running via `curl ... | bash` directly, as piping stdin bypasses terminal control needed for interactive prompts and text editors.
+
+---
 
 ## Features
 
-- 🚀 **System Updates**: Automatically updates package repositories and installs essential tools
-- 🔧 **BBR TCP Optimization**: Enables BBR congestion control for better network performance
-- 🔒 **SSH Hardening**: Interactive SSH port configuration with firewall rules
-- 🌐 **Xray Core**: Installs and configures Xray with custom user-provided configuration
-- 🔥 **UFW Firewall**: Configures firewall with proper TCP/UDP rules
-- ⚡ **Oh-My-Zsh**: Installs Oh-My-Zsh for improved terminal experience
+- 🚀 **System Package Management**: Updates repository indexes non-interactively and installs essential utilities (`curl`, `wget`, `net-tools`, `ufw`, `zsh`, `git`, `procps`, `nano`, `openssh-client`).
+- 🔧 **BBR TCP Optimization**: Configures BBR congestion control via `/etc/sysctl.d/99-bbr.conf` idempotently, with fallback detection for container environments (OpenVZ/LXC).
+- 🔒 **SSH Hardening & Public Key Authentication**:
+  - Interactive custom port prompt with strict input validation (1–65535).
+  - **SSH Public Key Setup**: Prompts to paste a public SSH key, validates its format via `ssh-keygen`, and adds it to `/root/.ssh/authorized_keys`.
+  - **Automated Password Hardening**: Once an SSH key is set, the script immediately disables password authentication (`PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin prohibit-password`).
+  - Handles Debian 12 **systemd socket activation (`ssh.socket`)** via drop-in override (`listen.conf`), preventing port lockout.
+  - Updates `/etc/ssh/sshd_config` and `/etc/ssh/sshd_config.d/01-vps-setup.conf`.
+  - Runs pre-flight configuration test (`sshd -t`) before applying changes.
+- 🌐 **Xray Core**:
+  - Installs the latest stable Xray core via the official XTLS installer.
+  - Pre-populates a valid starter configuration if none exists.
+  - Opens `nano` for custom configuration review or editing.
+  - Automatically validates syntax with `xray run -test -c ...` in a loop, allowing you to fix errors before starting the service.
+- ⚡ **Oh-My-Zsh & Zsh Default Shell**: Installs Oh-My-Zsh unattended and updates root's default login shell to `/bin/zsh`.
+- 🔥 **UFW Firewall**: Sets default deny policy for incoming traffic, allowing only your configured SSH and Xray ports.
+- 🛡️ **Safe Reboot**: Warns you to verify SSH connectivity in a separate terminal before exiting and prompts for confirmation before rebooting.
+
+---
 
 ## Requirements
 
-- **Operating System**: Debian 12
-- **Privileges**: Root access required
-- **Network**: Internet connection for downloading packages
+- **Operating System**: Debian 12 (Bookworm)
+- **Privileges**: Root access (`sudo` or logged in as `root`)
+- **Network**: Internet access to download packages and GitHub assets
+
+---
+
+## Repository Structure
+
+```
+debian-12-init/
+├── vps-setup.sh      # Main setup script
+└── README.md         # Documentation
+```
+
+If deploying to your own GitHub fork, update the raw URL:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/vps-setup.sh)
+```
+
+---
 
 ## Script Workflow
 
-The script will guide you through the following steps:
+The script guides you through the following sequential steps:
 
-### 1. System Preparation
-- Updates package repositories
-- Installs essential packages: `curl`, `wget`, `net-tools`, `ufw`, `zsh`, `git`
+1. **Root & TTY Detection**: Verifies root execution and re-attaches `/dev/tty` if needed.
+2. **System Update**: Refreshes package lists non-interactively.
+3. **Dependencies**: Installs `curl`, `wget`, `net-tools`, `ufw`, `zsh`, `git`, `procps`, `nano`, and `openssh-client`.
+4. **BBR TCP Optimization**: Loads `tcp_bbr` and applies `fq` + `bbr` via `/etc/sysctl.d/99-bbr.conf`.
+5. **SSH Port & Key Hardening**:
+   - Prompts for your desired SSH port (default: 22).
+   - Prompts whether to add a public SSH key (e.g. `ssh-ed25519 AAAAC3...`).
+   - Validates the key format using `ssh-keygen` and saves it to `/root/.ssh/authorized_keys` with `600` permissions.
+   - **If a key is configured**: Disables password authentication (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `KbdInteractiveAuthentication no`).
+   - **If skipped**: Keeps password login enabled to prevent lockout.
+   - Configures `/etc/systemd/system/ssh.socket.d/listen.conf` for Debian 12 socket activation.
+   - Restarts SSH services/sockets and validates syntax with `sshd -t`.
+6. **Xray Installation & Setup**:
+   - Prompts for Xray port (default: 443), ensuring it does not collide with your SSH port.
+   - Installs the latest stable Xray core.
+   - Opens `nano` with a pre-populated template for your inspection.
+   - Validates JSON configuration with `xray run -test -c ...`.
+   - Enables and starts the `xray` service.
+7. **Oh-My-Zsh**: Installs Oh-My-Zsh and sets root's default shell to Zsh.
+8. **UFW Firewall**: Resets rules, applies default deny incoming, and allows the chosen SSH and Xray ports.
+9. **Verification & Optional Reboot**: Displays setup summary and asks whether to reboot now.
 
-### 2. Network Optimization
-- Enables BBR TCP congestion control for improved network performance
-- Applies system-level network settings
+---
 
-### 3. SSH Configuration
-- **Interactive**: Prompts for custom SSH port (default: 22)
-- Updates SSH daemon configuration
-- Configures firewall rules for the selected port
+## Example Xray Configurations
 
-### 4. Xray Core Installation
-- Installs Xray core version 25.3.6
-- **Interactive**: Opens nano editor for custom Xray configuration
-- You can paste your complete `config.json` file here
-- Supports any Xray protocol (VMess, VLESS, Trojan, etc.)
-
-### 5. Service Activation
-- Enables Xray service for automatic startup
-- **Starts Xray immediately** to verify configuration works
-- Script will fail if config is invalid (good error handling)
-
-### 6. Terminal Enhancement
-- Installs Oh-My-Zsh with default settings
-- Sets up improved terminal environment
-
-### 7. Firewall Configuration
-- Configures UFW with rules for:
-  - SSH port (TCP)
-  - Xray port (TCP + UDP)
-- Enables firewall automatically
-
-### 8. System Reboot
-- Automatic reboot to apply all changes
-- Countdown timer allows cancellation
-
-## Xray Configuration
-
-When the script prompts for Xray configuration, you'll see this interface:
-
-```
-Opening nano editor for Xray configuration...
-
-WARNING: Please paste your complete Xray configuration into nano.
-WARNING: Save the file by pressing Ctrl+X, then Y, then Enter.
-
-[ nano editor opens with /usr/local/etc/xray/config.json ]
-```
-
-### Example Xray Configurations
-
-#### VMess Configuration:
+### VLESS (Recommended Default)
 ```json
 {
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "YOUR-UUID-HERE",
+            "flow": ""
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom"
+    }
+  ]
+}
+```
+
+### VMess
+```json
+{
+  "log": {
+    "loglevel": "warning"
+  },
   "inbounds": [
     {
       "port": 443,
@@ -115,7 +144,7 @@ WARNING: Save the file by pressing Ctrl+X, then Y, then Enter.
       "settings": {
         "clients": [
           {
-            "id": "your-uuid-here",
+            "id": "YOUR-UUID-HERE",
             "alterId": 0
           }
         ]
@@ -130,127 +159,108 @@ WARNING: Save the file by pressing Ctrl+X, then Y, then Enter.
 }
 ```
 
-#### VLESS Configuration:
-```json
-{
-  "inbounds": [
-    {
-      "port": 443,
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": "your-uuid-here",
-            "encryption": "none"
-          }
-        ]
-      }
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom"
-    }
-  ]
-}
-```
+---
 
-## Post-Setup
+## File Locations
 
-After the script completes and the system reboots:
+| Component | Path |
+| :--- | :--- |
+| **SSH Authorized Keys** | `/root/.ssh/authorized_keys` |
+| **SSH Daemon Config** | `/etc/ssh/sshd_config` & `/etc/ssh/sshd_config.d/01-vps-setup.conf` |
+| **Systemd SSH Socket Drop-in** | `/etc/systemd/system/ssh.socket.d/listen.conf` |
+| **Xray Configuration** | `/usr/local/etc/xray/config.json` |
+| **BBR Sysctl Config** | `/etc/sysctl.d/99-bbr.conf` |
+| **Oh-My-Zsh Installation** | `/root/.oh-my-zsh` |
+| **UFW Rules** | `/etc/ufw/user.rules` |
 
-1. **SSH Access**: Connect using your configured port:
-   ```bash
-   ssh root@your-server-ip -p YOUR_SSH_PORT
-   ```
+---
 
-2. **Xray Service**: Check status:
+## Post-Setup Verification
+
+1. **Verify SSH Access**:
+   Always test in a **new terminal tab** before disconnecting your current session:
+   - **If SSH key was configured:**
+     ```bash
+     ssh -i ~/.ssh/id_ed25519 -p YOUR_SSH_PORT root@YOUR_SERVER_IP
+     ```
+   - **If password login was kept:**
+     ```bash
+     ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP
+     ```
+
+2. **Check Xray Status**:
    ```bash
    systemctl status xray
+   journalctl -u xray -e
    ```
 
-3. **Firewall Status**: View UFW rules:
+3. **Validate Xray Configuration**:
+   ```bash
+   xray run -test -c /usr/local/etc/xray/config.json
+   ```
+
+4. **Verify Firewall Rules**:
    ```bash
    ufw status verbose
    ```
 
-4. **BBR Verification**: Verify BBR is enabled:
+5. **Verify BBR Congestion Control**:
    ```bash
    sysctl net.ipv4.tcp_congestion_control
    ```
 
-## File Locations
-
-- **Xray Config**: `/usr/local/etc/xray/config.json`
-- **SSH Config**: `/etc/ssh/sshd_config`
-- **UFW Config**: `/etc/ufw/user.rules`
-- **System Config**: `/etc/sysctl.conf`
-
-## Security Notes
-
-- ⚠️ **Important**: Remember your SSH port and update SSH client accordingly
-- 🔐 **Firewall**: All ports are blocked except SSH and Xray ports you configure
-- 🛡️ **Root Access**: SSH root login is enabled for convenience - consider disabling later
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Script Permission Denied**:
+6. **Verify Active Listening Ports**:
    ```bash
-   chmod +x vps-setup.sh
+   ss -tulpn
    ```
-
-2. **SSH Connection Refused**:
-   - Check firewall rules: `ufw status`
-   - Verify SSH config: `cat /etc/ssh/sshd_config | grep Port`
-
-3. **Xray Service Not Starting**:
-   - Check logs: `journalctl -u xray -f`
-   - Validate config: `xray -config /usr/local/etc/xray/config.json -test`
-
-4. **BBR Not Enabled**:
-   - Verify config: `cat /etc/sysctl.conf | grep bbr`
-   - Apply manually: `sysctl -p`
-
-## Script Structure
-
-```
-vps-setup.sh
-├── Color definitions and functions
-├── Root privilege check
-├── System update
-├── Package installation
-├── BBR configuration
-├── SSH port setup
-├── Xray installation and config
-├── Xray service enablement (immediate start for validation)
-├── Oh-My-Zsh installation
-├── UFW firewall setup
-└── System reboot
-```
-
-## Contributing
-
-Feel free to submit issues or pull requests to improve this script. Common enhancement requests:
-
-- Additional protocol support
-- SSL certificate automation
-- Advanced security configurations
-- Multi-user setup options
-
-## License
-
-This script is provided as-is for educational and personal use. Please review the code and understand what it does before running on production systems.
-
-## Support
-
-For support, please:
-1. Check the troubleshooting section above
-2. Review script logs for error messages
-3. Verify all prerequisites are met
-4. Test on a non-production system first
 
 ---
 
-**⚠️ Disclaimer**: This script modifies system configurations and security settings. Always understand the changes being made and test in a safe environment before use on critical systems.
+## Security Best Practices
+
+- 🛡️ **SSH Keys**: Disabling password authentication protects against automated brute-force attacks. Always keep a secure backup of your private key.
+- 🔐 **Firewall**: Ensure non-essential ports remain blocked. Only open additional ports when necessary using `ufw allow <port>/<protocol>`.
+- 🔄 **Maintenance**: Keep your system updated periodically with `apt update && apt upgrade -y`.
+
+---
+
+## Troubleshooting
+
+### 1. SSH Connection Refused or Permission Denied
+- If you disabled passwords, ensure you are specifying your private key:
+  ```bash
+  ssh -i /path/to/private_key -p YOUR_SSH_PORT root@YOUR_SERVER_IP
+  ```
+- Check if systemd socket activation is active:
+  ```bash
+  systemctl status ssh.socket
+  ss -tulpn | grep ssh
+  ```
+- Verify UFW allows your custom port:
+  ```bash
+  ufw status
+  ```
+
+### 2. Xray Service Fails to Start
+- Validate your JSON configuration for syntax or schema errors:
+  ```bash
+  xray run -test -c /usr/local/etc/xray/config.json
+  ```
+- Inspect systemd journal logs:
+  ```bash
+  journalctl -u xray -e --no-pager
+  ```
+
+### 3. BBR Congestion Control Not Active
+- On standard KVM/bare-metal VPS:
+  ```bash
+  modprobe tcp_bbr
+  sysctl -p /etc/sysctl.d/99-bbr.conf
+  ```
+- *Note:* In OpenVZ or shared LXC container environments, kernel modules cannot be loaded by container guests.
+
+---
+
+## License
+
+This project is open source and provided under the MIT License. Use at your own risk. Always test in a staging environment before running on production servers.
