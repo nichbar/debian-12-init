@@ -26,23 +26,23 @@ sudo ./vps-setup.sh
 
 ## Features
 
-- 🚀 **System Package Management**: Updates repository indexes non-interactively and installs essential utilities (`curl`, `wget`, `net-tools`, `ufw`, `zsh`, `git`, `procps`, `nano`, `openssh-client`).
-- 🔧 **BBR TCP Optimization**: Configures BBR congestion control via `/etc/sysctl.d/99-bbr.conf` idempotently, with fallback detection for container environments (OpenVZ/LXC).
-- 🔒 **SSH Hardening & Public Key Authentication**:
+- **System Package Management**: Updates repository indexes non-interactively and installs essential utilities (`curl`, `wget`, `net-tools`, `ufw`, `zsh`, `git`, `procps`, `nano`, `openssh-client`).
+- **BBR TCP Optimization**: Configures BBR congestion control via `/etc/sysctl.d/99-bbr.conf` idempotently, with fallback detection for container environments (OpenVZ/LXC).
+- **SSH Hardening & Public Key Authentication**:
   - Interactive custom port prompt with strict input validation (1–65535).
   - **SSH Public Key Setup**: Prompts to paste a public SSH key, validates its format via `ssh-keygen`, and adds it to `/root/.ssh/authorized_keys`.
   - **Automated Password Hardening**: Once an SSH key is set, the script immediately disables password authentication (`PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin prohibit-password`).
   - Handles Debian 12 **systemd socket activation (`ssh.socket`)** via drop-in override (`listen.conf`), preventing port lockout.
   - Updates `/etc/ssh/sshd_config` and `/etc/ssh/sshd_config.d/01-vps-setup.conf`.
   - Runs pre-flight configuration test (`sshd -t`) before applying changes.
-- 🌐 **Xray Core**:
+- **Xray Core**:
   - Installs the latest stable Xray core via the official XTLS installer.
   - Pre-populates a valid starter configuration if none exists.
   - Opens `nano` for custom configuration review or editing.
   - Automatically validates syntax with `xray run -test -c ...` in a loop, allowing you to fix errors before starting the service.
-- ⚡ **Oh-My-Zsh & Zsh Default Shell**: Installs Oh-My-Zsh unattended and updates root's default login shell to `/bin/zsh`.
-- 🔥 **UFW Firewall**: Sets default deny policy for incoming traffic, allowing only your configured SSH and Xray ports.
-- 🛡️ **Safe Reboot**: Warns you to verify SSH connectivity in a separate terminal before exiting and prompts for confirmation before rebooting.
+- **Oh-My-Zsh & Zsh Default Shell**: Installs Oh-My-Zsh unattended and updates root's default login shell to `/bin/zsh`.
+- **UFW Firewall**: Sets default deny policy for incoming traffic, allowing only your configured SSH and Xray ports.
+- **Safe Reboot**: Warns you to verify SSH connectivity in a separate terminal before exiting and prompts for confirmation before rebooting.
 
 ---
 
@@ -154,9 +154,9 @@ The script guides you through the following sequential steps:
 
 ## Security Best Practices
 
-- 🛡️ **SSH Keys**: Disabling password authentication protects against automated brute-force attacks. Always keep a secure backup of your private key.
-- 🔐 **Firewall**: Ensure non-essential ports remain blocked. Only open additional ports when necessary using `ufw allow <port>/<protocol>`.
-- 🔄 **Maintenance**: Keep your system updated periodically with `apt update && apt upgrade -y`.
+- **SSH Keys**: Disabling password authentication protects against automated brute-force attacks. Always keep a secure backup of your private key.
+- **Firewall**: Ensure non-essential ports remain blocked. Only open additional ports when necessary using `ufw allow <port>/<protocol>`.
+- **Maintenance**: Keep your system updated periodically with `apt update && apt upgrade -y`.
 
 ---
 
