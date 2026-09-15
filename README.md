@@ -26,7 +26,7 @@ sudo ./vps-setup.sh
 
 ## Features
 
-- **System Package Management**: Updates repository indexes non-interactively and installs essential utilities (`curl`, `wget`, `net-tools`, `ufw`, `zsh`, `git`, `procps`, `nano`, `openssh-client`).
+- **System Package Management**: Offers an interactive prompt to perform a full system update (apt update & upgrade) or skip package upgrades while refreshing indexes, then installs essential utilities (`curl`, `wget`, `net-tools`, `ufw`, `zsh`, `git`, `procps`, `nano`, `openssh-client`).
 - **BBR TCP Optimization**: Configures BBR congestion control via `/etc/sysctl.d/99-bbr.conf` idempotently, with fallback detection for container environments (OpenVZ/LXC).
 - **SSH Hardening & Public Key Authentication**:
   - Interactive custom port prompt with strict input validation (1–65535).
@@ -42,6 +42,7 @@ sudo ./vps-setup.sh
   - Automatically validates syntax with `xray run -test -c ...` in a loop, allowing you to fix errors before starting the service.
 - **Oh-My-Zsh & Zsh Default Shell**: Installs Oh-My-Zsh unattended and updates root's default login shell to `/bin/zsh`.
 - **UFW Firewall**: Sets default deny policy for incoming traffic, allowing only your configured SSH and Xray ports.
+- **SynBlocker (SYN Flood Protection)**: Optional integration of SynBlocker (https://github.com/nichbar/SynBlocker) to monitor TCP SYN_RECV connections and automatically ban attacking /24 subnets via UFW.
 - **Safe Reboot**: Warns you to verify SSH connectivity in a separate terminal before exiting and prompts for confirmation before rebooting.
 
 ---
@@ -74,7 +75,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/
 The script guides you through the following sequential steps:
 
 1. **Root & TTY Detection**: Verifies root execution and re-attaches `/dev/tty` if needed.
-2. **System Update**: Refreshes package lists non-interactively.
+2. **System Update Option**: Prompts whether to perform a full system update (`apt update & upgrade`) or skip package upgrades while refreshing indexes for prerequisites.
 3. **Dependencies**: Installs `curl`, `wget`, `net-tools`, `ufw`, `zsh`, `git`, `procps`, `nano`, and `openssh-client`.
 4. **BBR TCP Optimization**: Loads `tcp_bbr` and applies `fq` + `bbr` via `/etc/sysctl.d/99-bbr.conf`.
 5. **SSH Port & Key Hardening**:
@@ -93,7 +94,8 @@ The script guides you through the following sequential steps:
    - Enables and starts the `xray` service.
 7. **Oh-My-Zsh**: Installs Oh-My-Zsh and sets root's default shell to Zsh.
 8. **UFW Firewall**: Resets rules, applies default deny incoming, and allows the chosen SSH and Xray ports.
-9. **Verification & Optional Reboot**: Displays setup summary and asks whether to reboot now.
+9. **SynBlocker (Optional)**: Prompts to install the SynBlocker SYN flood mitigation tool, setting up automated cron monitoring and providing the `synblocker` CLI.
+10. **Verification & Optional Reboot**: Displays setup summary and asks whether to reboot now.
 
 ---
 
@@ -108,6 +110,9 @@ The script guides you through the following sequential steps:
 | **BBR Sysctl Config** | `/etc/sysctl.d/99-bbr.conf` |
 | **Oh-My-Zsh Installation** | `/root/.oh-my-zsh` |
 | **UFW Rules** | `/etc/ufw/user.rules` |
+| **SynBlocker Location** | `/root/SyncBlocker/` & `/usr/local/bin/synblocker` |
+| **SynBlocker Logs** | `/var/log/syn-flood/` |
+| **SynBlocker Cron Job** | `/etc/cron.d/syn-monitor` |
 
 ---
 
@@ -148,6 +153,15 @@ The script guides you through the following sequential steps:
 6. **Verify Active Listening Ports**:
    ```bash
    ss -tulpn
+   ```
+
+7. **Check SynBlocker Status (if installed)**:
+   ```bash
+   synblocker status
+   ```
+   Inspect ban logs:
+   ```bash
+   synblocker logs
    ```
 
 ---

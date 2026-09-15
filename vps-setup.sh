@@ -111,16 +111,27 @@ fi
 print_status "Starting VPS setup for Debian 12..."
 echo
 
-# Step 1: Update system packages
-print_status "Updating system package index..."
+# Step 1: System Update Option
+update_system_choice="y"
+read -r -p "Do you want to perform a full system update (apt update & upgrade)? [Y/n]: " update_system_choice || true
+update_system_choice="${update_system_choice:-y}"
+
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -y
-print_success "System package index updated"
+
+if [[ "$update_system_choice" =~ ^[Yy]$ ]]; then
+    print_status "Updating package lists and upgrading system packages..."
+    apt-get update -y && apt-get upgrade -y
+    print_success "System packages updated and upgraded successfully"
+else
+    print_status "Skipping system upgrade. Refreshing package lists for prerequisite installation..."
+    apt-get update -y
+    print_success "Package lists refreshed"
+fi
 echo
 
 # Step 2: Install required packages
 print_status "Installing required packages..."
-apt-get install -y --no-install-recommends curl wget net-tools ufw zsh git procps nano openssh-client
+apt-get install -y --no-install-recommends curl wget net-tools ufw zsh git procps nano openssh-client cron
 print_success "Required packages installed"
 echo
 
@@ -447,10 +458,53 @@ ufw --force enable
 print_success "UFW enabled with rules for SSH ($ssh_port/tcp) and Xray ($xray_port/tcp, $xray_port/udp)"
 echo
 
+# Step 10: Install SynBlocker (SYN Flood Protection)
+install_synblocker="n"
+read -r -p "Do you want to install SynBlocker (SYN flood protection system)? [y/N]: " install_synblocker || true
+install_synblocker="${install_synblocker:-n}"
+
+synblocker_installed=false
+if [[ "$install_synblocker" =~ ^[Yy]$ ]]; then
+    print_status "Installing SynBlocker (https://github.com/nichbar/SynBlocker)..."
+    synblocker_dir="/root/SyncBlocker"
+
+    if [ -d "$synblocker_dir" ]; then
+        print_status "Updating existing SynBlocker directory at $synblocker_dir..."
+        git -C "$synblocker_dir" pull 2>/dev/null || true
+    else
+        print_status "Cloning SynBlocker repository..."
+        if ! git clone --depth 1 https://github.com/nichbar/SynBlocker.git "$synblocker_dir" 2>/dev/null; then
+            print_warning "Git clone failed. Attempting direct script download..."
+            mkdir -p "$synblocker_dir"
+            curl -fsSL https://raw.githubusercontent.com/nichbar/SynBlocker/dev/syn-monitor.sh -o "$synblocker_dir/syn-monitor.sh"
+            curl -fsSL https://raw.githubusercontent.com/nichbar/SynBlocker/dev/syn-flood-cli.sh -o "$synblocker_dir/syn-flood-cli.sh"
+        fi
+    fi
+
+    if [ -f "$synblocker_dir/syn-flood-cli.sh" ] && [ -f "$synblocker_dir/syn-monitor.sh" ]; then
+        chmod +x "$synblocker_dir"/*.sh
+        bash "$synblocker_dir/syn-flood-cli.sh" install
+        ln -sf "$synblocker_dir/syn-flood-cli.sh" /usr/local/bin/synblocker
+        ln -sf "$synblocker_dir/syn-flood-cli.sh" /usr/local/bin/syn-flood-cli
+        systemctl enable cron 2>/dev/null || true
+        systemctl start cron 2>/dev/null || true
+        synblocker_installed=true
+        print_success "SynBlocker installed successfully! (CLI available via 'synblocker' command)"
+    else
+        print_error "Failed to retrieve SynBlocker scripts. Skipping installation."
+    fi
+    echo
+fi
+
 print_success "========================================="
 print_success "VPS Setup Complete!"
 print_success "========================================="
 print_status "Summary:"
+if [[ "$update_system_choice" =~ ^[Yy]$ ]]; then
+    echo "  - System packages: Updated and upgraded"
+else
+    echo "  - System packages: Upgrade skipped (package index refreshed)"
+fi
 echo "  - BBR TCP congestion control configured"
 echo "  - SSH configured on port: $ssh_port"
 if [ "$ssh_key_configured" = true ]; then
@@ -461,6 +515,11 @@ fi
 echo "  - Xray core configured on port: $xray_port"
 echo "  - UFW firewall enabled (allowed: $ssh_port/tcp, $xray_port/tcp, $xray_port/udp)"
 echo "  - Oh-My-Zsh installed (root shell: zsh)"
+if [ "$synblocker_installed" = true ]; then
+    echo "  - SynBlocker: Installed and running (manage with 'synblocker status')"
+else
+    echo "  - SynBlocker: Not installed"
+fi
 echo
 if [ "$ssh_key_configured" = true ]; then
     print_warning "CRITICAL: Before disconnecting, verify SSH login with your private key in a NEW terminal:"
